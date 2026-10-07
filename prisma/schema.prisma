@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
+  avatarUrl     String?
+  onboardingDone Boolean   @default(false)
+  passwordHash  String
+  role          String    @default("USER") // USER, SELLER, MODERATOR, ADMIN
+  balance       Float     @default(0)
+  reputation    Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  badges        UserBadge[]
+  sellerProfile SellerProfile?
+  orders        Order[]       @relation("BuyerOrders")
+  reviews       Review[]
+  topics        ForumTopic[]
+  posts         ForumPost[]
+  messagesSent  Message[]     @relation("SentMessages")
+  messagesRecv  Message[]     @relation("ReceivedMessages")
+  walletTx      WalletTransaction[]
+  sessions      Session[]
+  cartItems     CartItem[]
+  favorites     Favorite[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model SellerProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  status      String   @default("ACTIVE") // ACTIVE, SUSPENDED
+  totalSales  Int      @default(0)
+  rating      Float    @default(0)
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products    Product[]
+  orders      Order[]  @relation("SellerOrders")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  parentId    String?
+  parent      Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  subcats     Category[] @relation("CategoryToCategory")
+  icon        String?
+  description String?
+  products    Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sellerId    String
+  seller      SellerProfile @relation(fields: [sellerId], references: [id])
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  title       String
+  slug        String   @unique
+  description String
+  price       Float
+  discount    Float    @default(0)
+  stock       Int      @default(0)
+  type        String   @default("MANUAL") // MANUAL, AUTOMATIC
+  status      String   @default("ACTIVE") // ACTIVE, HIDDEN, MODERATION, REJECTED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images      ProductImage[]
+  orderItems  OrderItem[]
+  keys        DigitalKey[]
+  reviews     Review[]
+  cartItems   CartItem[]
+  favorites   Favorite[]
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+}
+
+model DigitalKey {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  key       String
+  isUsed    Boolean  @default(false)
+  orderId   String?
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  buyerId     String
+  buyer       User     @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId    String
+  seller      SellerProfile @relation("SellerOrders", fields: [sellerId], references: [id])
+  totalAmount Float
+  status      String   @default("PENDING") // PENDING, PAID, IN_PROGRESS, COMPLETED, CANCELLED, DISPUTED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       OrderItem[]
+  dispute     Dispute?
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  rating      Int
+  text        String?
+  sellerReply String?
+  createdAt   DateTime @default(now())
+}
+
+model ForumCategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  section     String   @default("OTHER") // MARKETPLACE, COMMUNITY, SUPPORT, OTHER
+  position    Int      @default(0)
+  topics      ForumTopic[]
+}
+
+model ForumTopic {
+  id          String   @id @default(cuid())
+  categoryId  String
+  category    ForumCategory @relation(fields: [categoryId], references: [id])
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  title       String
+  content     String
+  views       Int      @default(0)
+  status      String   @default("OPEN") // OPEN, CLOSED, SOLVED
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts       ForumPost[]
+}
+
+model ForumPost {
+  id          String   @id @default(cuid())
+  topicId     String
+  topic       ForumTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  content     String
+  isSolution  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Dispute {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  buyerId     String
+  sellerId    String
+  moderatorId String?
+  status      String   @default("OPEN") // OPEN, RESOLVED_BUYER, RESOLVED_SELLER, CLOSED
+  createdAt   DateTime @default(now())
+}
+
+model WalletTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // DEPOSIT, PURCHASE, SALE, WITHDRAWAL, REFUND
+  amount    Float
+  status    String   @default("COMPLETED")
+  createdAt DateTime @default(now())
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  name        String
+  icon        String
+  color       String
+  description String?
+  category    String      @default("SYSTEM") // SYSTEM, ACHIEVEMENT, COSMETIC
+  priority    Int         @default(0)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  users       UserBadge[]
+}
+
+model UserBadge {
+  userId      String
+  badgeId     String
+  assignedAt  DateTime @default(now())
+
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge       Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, badgeId])
+}
